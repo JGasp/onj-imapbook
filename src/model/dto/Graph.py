@@ -1,16 +1,14 @@
+from typing import List
+
+from model.dto.Mark import Mark
+
 
 class Graph:
     def __init__(self, nodes):
-        self.nodes = nodes
+        self.nodes: List[Node] = nodes
 
-        self.similarity_0 = {}
-        self.avg_similarity_0 = 0
-
-        self.similarity_05 = {}
-        self.avg_similarity_05 = 0
-
-        self.similarity_1 = {}
-        self.avg_similarity_1 = 0
+        self.similarity = {Mark.M0: {}, Mark.M05: {}, Mark.M1: {}}
+        self.avg_similarity = {Mark.M0: 0, Mark.M05: 0, Mark.M1: 0}
 
         self.node_index = {}
         for i, n in enumerate(nodes):
@@ -32,6 +30,9 @@ class Node:
         self.prev: Link = prev_link
         self.next: Link = next_link
 
+    def __str__(self):
+        return self.word
+
 
 class Link:
     def __init__(self):
@@ -39,3 +40,6 @@ class Link:
 
     def add(self, word: str):
         self.words.append(word)
+
+    def __str__(self):
+        return ",".join(self.words)

@@ -1,15 +1,14 @@
-from qaModel.qaModel import QAModel
-import data
+from model.QAEvaluationModel import QAEvaluationModel
+from model import Data
 
 
 class LearnerModelA:
     def __init__(self):
-        self.raw_text = data.get_text()
-        self.questions = data.get_questions()
+        self.raw_text = Data.get_text()
+        self.questions = Data.get_questions()
 
     def build(self):
-        qa_model = QAModel()
-        qa_model.set_text(self.raw_text)
+        qa_model = QAEvaluationModel()
         qa_model.set_questions(self.questions)
         qa_model.build()
 
@@ -17,7 +16,7 @@ class LearnerModelA:
 
 
 class ClassifierModelA:
-    def __init__(self, model: QAModel):
+    def __init__(self, model: QAEvaluationModel):
         self.model = model
 
     def make_prediction(self, question, answer):

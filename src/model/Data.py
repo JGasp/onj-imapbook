@@ -1,4 +1,7 @@
 import pandas
+from model.dto.Answer import Answer
+from model.dto.Answer import Mark
+from model.dto.Question import Question
 
 
 def get_text():
@@ -14,18 +17,19 @@ def get_questions():
         q = row['Question']
 
         if q in questions:
-            q_set = questions[q]
+            q_data = questions[q]
         else:
-            q_set = []
-            questions[q] = q_set
+            context = row['Text.used.to.make.inference']
+            q_data = Question(q, context_text=context)
+            questions[q] = q_data
 
         res = row['Response']
         gr = row['Glenn.s.rating']
         ar = row['Amber.s.rating']
         fr = row['Final.rating']
 
-        ans = {"res": res, "gr": gr, "ar": ar, "fr": fr}
+        ans = Answer(res, Mark.by_value(gr), Mark.by_value(ar), Mark.by_value(fr))
 
-        q_set.append(ans)
+        q_data.add_answer(ans)
 
     return questions

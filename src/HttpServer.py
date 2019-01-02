@@ -1,9 +1,9 @@
 import socketserver
 import json
 
-from models.modelA import ClassifierModelA
-from models.modelB import ClassifierModelB
-from models.modelC import ClassifierModelC
+from model.custom.ModelA import ClassifierModelA
+from model.custom.ModelB import ClassifierModelB
+from model.custom.ModelC import ClassifierModelC
 
 
 # Initialize all models

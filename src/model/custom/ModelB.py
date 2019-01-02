@@ -1,29 +1,24 @@
 from typing import Dict
 
-from qaModel.dataStructure.question import Question
-
-import pandas
+from model.dto.Question import Question
 
 
 class LearnerModelB:
     def __init__(self):
-        self.questions: Dict[Question] = {}
+        self.questions: Dict[str, Question] = {}
 
     def build(self):
-        self.load_data()
-
-
-
+        print("TODO")
 
 
 class ClassifierModelB:
     def __init__(self):
-        print("asd")
+        print("TODO")
 
     def make_prediction(self, question, answer):
-        print("asd")
+        print("TODO")
 
     @staticmethod
     def get_build_model():
         # TODO pre-build model
-        return ClassifierModelB
+        return ClassifierModelB()
