@@ -54,26 +54,24 @@ class CrossValidationTest:
             for key in test:
                 q = test[key]
 
-                res = {"response": [], "actual": [], "predicted": []}
-
                 for a in q.answers:
-                    ri = qa_model.make_prediction(q.raw_text, a)
-                    res["response"].append(a)
-                    res["predicted"].append(ri)
-                    res["actual"].append(a["fr"])
-
-                results[q] = res
-
-        mae = 0
-        counter = 0
+                    ri = qa_model.make_regression_prediction(q.raw_text, a.raw_text)
+                    actual_mark = float(a.final_mark.value.replace(",", "."))
+                    res = {"response": a.raw_text, "actual": actual_mark, "predicted": ri}
+                    results[q.raw_text].append(res)
 
         for q in results:
             answers = results[q]
+            mae = 0
+            counter = 0
 
-            print("Question %s" % q)
+            print(">>>> Question %s" % q)
 
             for a in answers:
                 mae += abs(a["predicted"] - a["actual"])
                 counter += 1
 
-                print("%s \t %f %f" % (a, a["predicted"], a["actual"]))
+                print("%f %f \t %s" % (a["predicted"], a["actual"], a["response"]))
+
+            mae /= counter
+            print("#### MAE: %f" % mae)

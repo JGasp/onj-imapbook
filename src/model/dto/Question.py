@@ -16,6 +16,8 @@ class Question:
         self.answers: List[Answer] = []
         self.answers_by_mark: Dict[Mark, List[Answer]] = {Mark.M0: [], Mark.M05: [], Mark.M1: []}
 
+        self.linear_regression = None
+
     def add_answer(self, answer: Answer):
         self.answers.append(answer)
         self.answers_by_mark[answer.final_mark].append(answer)

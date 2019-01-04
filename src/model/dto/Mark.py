@@ -14,3 +14,6 @@ class Mark(Enum):
             return Mark.M1
         else:
             return Mark.M0
+    @staticmethod
+    def values():
+        return [Mark.M0, Mark.M05, Mark.M1]
