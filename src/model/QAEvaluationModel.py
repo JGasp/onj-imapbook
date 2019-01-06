@@ -22,18 +22,23 @@ class AnswerSimParam(Enum):
 
 
 class QAEvaluationModel:
-    def __init__(self, word_len=5, stop_word_len=5, len_lambda=0.2, ans_sim: AnswerSimParam=AnswerSimParam.AVG):
+    def __init__(self, word_len=5, stop_word_len=5, len_lambda=0.2, ans_sim=AnswerSimParam.AVG):
         self.questions: Dict[str, Question] = {}
 
         self.word_len = word_len
         self.stop_word_len = stop_word_len
         self.len_lambda = len_lambda
 
+        # Regularization
         self.context_base_similarity = self.word_len * 1
         self.answers_base_similarity = self.word_len * 1  # + self.stop_word_len * 1
 
         self.find_first_similar = True
         self.answer_similarity: AnswerSimParam = ans_sim
+
+        # Functions to override for word2vec
+        self.is_link_similarity = self.link_similarity
+        self.get_similar_nodes = self.filter_similar_nodes
 
         self.Stemmer = SnowballStemmer("english")
         self.Stop_words = set(stopwords.words('english'))
@@ -92,6 +97,21 @@ class QAEvaluationModel:
 
         return distance
 
+    # TODO: Word2Vec similarity
+    @staticmethod
+    def link_similarity(link: Link, stop_words):
+        for w in link.words:
+            if w in stop_words:
+                return True
+        return False
+
+    @staticmethod
+    def filter_similar_nodes(word, graph: Graph):
+        if word in graph.node_index:
+            return graph.node_index[word]
+        else:
+            return []
+
     def calculate_answer_similarity(self, answer: Answer, graph: Graph, mark: Mark):
         similarity = 0
         sim_values = graph.similarity[mark]
@@ -99,7 +119,7 @@ class QAEvaluationModel:
         prev_word_index = []
         stop_words = {}
         for an in answer.text_graph.nodes:
-            word_index = graph.get_nodes_with_word(an.word)
+            word_index = self.get_similar_nodes(an.word, graph)
 
             # Increase node score
             if len(word_index) > 0:
@@ -121,10 +141,9 @@ class QAEvaluationModel:
 
                                 stop_words_sim = 0
                                 if n.next in sim_values:
-                                    for w in n.next.words:
-                                        if w in stop_words:
-                                            stop_words_sim += sim_values[n.next]
-                                            break  # Disregard multiple stop_words similarity
+                                    if self.is_link_similarity(n.next, stop_words):
+                                        stop_words_sim += sim_values[n.next]
+                                        break  # Disregard multiple stop_words similarity
 
                                 if self.len_lambda > 0:
                                     stop_words_sim = stop_words_sim / (self.len_lambda * distance)
@@ -156,7 +175,7 @@ class QAEvaluationModel:
         stop_words = {}
 
         for an in answer.text_graph.nodes:
-            node_index = graph.get_nodes_with_word(an.word)
+            node_index = self.get_similar_nodes(an.word, graph)
 
             if len(node_index) > 0:
                 # Increase node score TODO: try decrease with number of multiple appearances
@@ -178,10 +197,9 @@ class QAEvaluationModel:
                                 n = graph.nodes[i]
 
                                 stop_word_similarity = 0.0
-                                for w in n.next.words:
-                                    if w in stop_words:
-                                        stop_word_similarity += self.stop_word_len
-                                        break  # Disregard multiple stop_words similarity
+
+                                if self.is_link_similarity(n.next, stop_words):
+                                    stop_word_similarity += self.stop_word_len
 
                                 if stop_word_similarity > 0:
                                     # Penalize long references
@@ -269,7 +287,7 @@ class QAEvaluationModel:
                 X.append(x_i)
                 y.append(y_i)
 
-            # TODO: Handle over fitting & introduce new generated answers with mark 0
+            # TODO: Handle over fitting
             lm = linear_model.LinearRegression()
             model = lm.fit(X, y)
 

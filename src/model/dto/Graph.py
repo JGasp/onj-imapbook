@@ -16,12 +16,6 @@ class Graph:
                 self.node_index[n.word] = []
             self.node_index[n.word].append(i)
 
-    def get_nodes_with_word(self, word):
-        if word in self.node_index:
-            return self.node_index[word]
-        else:
-            return []
-
 
 class Node:
     def __init__(self, word: str, prev_link, next_link):
