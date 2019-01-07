@@ -43,9 +43,7 @@ class QAEvaluationModel:
         self.Stemmer = SnowballStemmer("english")
         self.Stop_words = set(stopwords.words('english'))
 
-    def set_questions(self, questions: Dict[str, Question]):
-        self.questions = {}
-
+    def add_questions(self, questions: Dict[str, Question]):
         for key, q in questions.items():
             q_copy = q.copy()
             q_copy.build_graph(self.build_graph)

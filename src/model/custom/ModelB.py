@@ -16,7 +16,7 @@ class LearnerModelB:
                 self.questions[key].add_answer(ga)
 
         model = QAEvaluationModel()
-        model.set_questions(self.questions)
+        model.add_questions(self.questions)
         model.build()
 
         return ClassifierModelB(model)

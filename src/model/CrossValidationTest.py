@@ -58,7 +58,7 @@ class CrossValidationTest:
                 test[q.raw_text] = q_test_copy
 
             qa_model = QAEvaluationModel()
-            qa_model.set_questions(train)
+            qa_model.add_questions(train)
             qa_model.build()
 
             for key in test:

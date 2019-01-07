@@ -1,6 +1,7 @@
 from typing import Dict
 
 from model import Data
+from model.ConceptNetCore import ConceptNetCore
 from model.QAEvaluationModel import QAEvaluationModel
 from model.dto import Question
 from model.dto.Graph import Link, Graph
@@ -8,12 +9,19 @@ import gensim
 
 
 class LearnerModelC:
-    def __init__(self):
-        self.questions: Dict[str, Question] = Data.get_questions()
-        self.generated_questions: Dict[str, Question] = Data.get_generated_answers()
+    def __init__(self, use_concept_net=True,
+                 questions=Data.get_questions(),
+                 generated_questions=Data.get_generated_answers(), similarity_threshold=0.7):
 
+        self.questions: Dict[str, Question] = questions
+        self.generated_questions: Dict[str, Question] = generated_questions
+
+        # Download from https://github.com/mmihaltz/word2vec-GoogleNews-vectors
         self.model = gensim.models.Word2Vec.load_word2vec_format('./model/GoogleNews-vectors-negative300.bin', binary=True)
-        self.similarity_threshold = 0.7
+        self.similarity_threshold = similarity_threshold
+
+        self.use_concept_net = use_concept_net
+        self.concept_net_core = ConceptNetCore()
 
         # Thresholds
         # buy <> purchase => 0.7639905
@@ -32,9 +40,17 @@ class LearnerModelC:
     def filter_similar_nodes(self, word, graph: Graph):
         nodes = []
         for key, ni in graph.node_index.items():
-            sim = self.model.similarity(word, key)
-            if sim > self.similarity_threshold:
-                nodes.extend(ni)
+            words = [key]
+
+            if self.use_concept_net:
+                data = self.concept_net_core.get_data(key)
+                for d in data:
+                    words.append(d.label)
+
+            for w in words:
+                sim = self.model.similarity(word, w)
+                if sim > self.similarity_threshold:
+                    nodes.extend(ni)
 
         return nodes
 
@@ -47,7 +63,7 @@ class LearnerModelC:
         model.is_link_similarity = self.link_similarity
         model.get_similar_nodes = self.filter_similar_nodes
 
-        model.set_questions(self.questions)
+        model.add_questions(self.questions)
         model.build()
 
         return ClassifierModelC(model)
