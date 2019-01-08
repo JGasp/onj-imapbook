@@ -14,6 +14,8 @@ from nltk.stem.snowball import SnowballStemmer
 from typing import Dict
 
 import re
+import pickle
+import os.path
 
 
 class AnswerSimParam(Enum):
@@ -42,6 +44,15 @@ class QAEvaluationModel:
 
         self.Stemmer = SnowballStemmer("english")
         self.Stop_words = set(stopwords.words('english'))
+
+    def persist(self, file_name):
+        with open(file_name, 'wb') as output:
+            pickle.dump(self.questions, output, pickle.HIGHEST_PROTOCOL)
+
+    def load(self, file_name):
+        if os.path.isfile(file_name):
+            with open(file_name, 'rb') as pickle_file:
+                self.questions = pickle.load(pickle_file)
 
     def add_questions(self, questions: Dict[str, Question]):
         for key, q in questions.items():
@@ -95,20 +106,25 @@ class QAEvaluationModel:
 
         return distance
 
-    # TODO: Word2Vec similarity
     @staticmethod
     def link_similarity(link: Link, stop_words):
         for w in link.words:
             if w in stop_words:
-                return True
-        return False
+                return 1
+        return 0
 
     @staticmethod
     def filter_similar_nodes(word, graph: Graph):
+        nodes_index = []
+        similarity = {}
+
         if word in graph.node_index:
-            return graph.node_index[word]
-        else:
-            return []
+            index_list = graph.node_index[word]
+            for i in index_list:
+                nodes_index.append(i)
+                similarity[i] = 1
+
+        return nodes_index, similarity
 
     def calculate_answer_similarity(self, answer: Answer, graph: Graph, mark: Mark):
         similarity = 0
@@ -117,20 +133,20 @@ class QAEvaluationModel:
         prev_word_index = []
         stop_words = {}
         for an in answer.text_graph.nodes:
-            word_index = self.get_similar_nodes(an.word, graph)
+            node_index, node_similarity = self.get_similar_nodes(an.word, graph)
 
             # Increase node score
-            if len(word_index) > 0:
-                for wi in word_index:
+            if len(node_index) > 0:
+                for wi in node_index:
                     n = graph.nodes[wi]
                     if n in sim_values:
-                        similarity += sim_values[n]
+                        similarity += sim_values[n] * node_similarity[wi]
 
                 if len(prev_word_index) > 0:
                     # Normalize score based on number of paths
-                    paths = len(prev_word_index) * len(word_index)
+                    paths = len(prev_word_index) * len(node_index)
                     for pwi in prev_word_index:
-                        for wi in word_index:
+                        for wi in node_index:
                             start, end = self.get_graph_direction(pwi, wi)
                             distance = self.calculate_node_distance(graph, start, end)
 
@@ -139,8 +155,9 @@ class QAEvaluationModel:
 
                                 stop_words_sim = 0
                                 if n.next in sim_values:
-                                    if self.is_link_similarity(n.next, stop_words):
-                                        stop_words_sim += sim_values[n.next]
+                                    sim_sw = self.is_link_similarity(n.next, stop_words)
+                                    if sim_sw > 0:
+                                        stop_words_sim += sim_values[n.next] * sim_sw
                                         break  # Disregard multiple stop_words similarity
 
                                 if self.len_lambda > 0:
@@ -148,8 +165,8 @@ class QAEvaluationModel:
 
                                 similarity += stop_words_sim / paths
 
-            if not(self.find_first_similar and len(word_index) == 0):
-                prev_word_index = word_index
+            if not(self.find_first_similar and len(node_index) == 0):
+                prev_word_index = node_index
                 stop_words = {}
 
             for w in an.next.words:
@@ -173,7 +190,7 @@ class QAEvaluationModel:
         stop_words = {}
 
         for an in answer.text_graph.nodes:
-            node_index = self.get_similar_nodes(an.word, graph)
+            node_index, node_similarity = self.get_similar_nodes(an.word, graph)
 
             if len(node_index) > 0:
                 # Increase node score TODO: try decrease with number of multiple appearances
@@ -181,7 +198,7 @@ class QAEvaluationModel:
                     n = graph.nodes[wi]
                     if n not in sim_values:
                         sim_values[n] = 0
-                    sim_values[n] += self.word_len
+                    sim_values[n] += self.word_len * node_similarity[wi]
 
                 if len(prev_word_index) > 0:
                     # Normalize score based on number of paths
@@ -194,10 +211,8 @@ class QAEvaluationModel:
                             for i in range(start, end):
                                 n = graph.nodes[i]
 
-                                stop_word_similarity = 0.0
-
-                                if self.is_link_similarity(n.next, stop_words):
-                                    stop_word_similarity += self.stop_word_len
+                                sim_sw = self.is_link_similarity(n.next, stop_words)
+                                stop_word_similarity = self.stop_word_len * sim_sw
 
                                 if stop_word_similarity > 0:
                                     # Penalize long references

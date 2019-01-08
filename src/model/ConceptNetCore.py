@@ -17,7 +17,7 @@ class ConceptNetClient:
     def __init__(self):
         self.uri = 'http://api.conceptnet.io'
 
-    def query(self, word, max_depth=3, max_items=1000):
+    def query(self, word, max_depth=1, max_items=100):
         edges = []
 
         words_to_resolve = [word]
@@ -27,6 +27,7 @@ class ConceptNetClient:
             next_batch = []
 
             for w in words_to_resolve:
+                print("ConceptNetClient: Resolving word [%s]" % w)
                 req = requests.get(self.uri + '/c/en/' + w).json()
 
                 for e in req['edges']:
@@ -35,8 +36,12 @@ class ConceptNetClient:
                     else:
                         node = e['start']
 
-                    next_batch.append(node['label'])
-                    edges.append(ConceptNetEdge(node['@id'], node['label'], depth, e['weight']))
+                    if 'language' in node:
+                        if node['language'] == 'en':
+                            next_batch.append(node['label'])
+                            edges.append(ConceptNetEdge(node['@id'], node['label'], depth, e['weight']))
+                            if len(edges) >= max_items:
+                                break
 
             depth += 1
             words_to_resolve = next_batch
@@ -44,6 +49,7 @@ class ConceptNetClient:
                 break
 
         return edges
+
 
 class ConceptNetStorage:
     def __init__(self):
@@ -55,7 +61,8 @@ class ConceptNetStorage:
 
     def load(self):
         if os.path.isfile(self.file_name):
-            return pickle.load(self.file_name)
+            with open(self.file_name, 'rb') as pickle_file:
+                return pickle.load(pickle_file)
         else:
             return {}
 
@@ -74,3 +81,6 @@ class ConceptNetCore:
             data = self.client.query(word)
             self.concept_net_data[word] = data
             return data
+
+    def persist(self):
+        self.storage.persist(self.concept_net_data)
