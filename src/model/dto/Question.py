@@ -22,6 +22,17 @@ class Question:
         self.answers.append(answer)
         self.answers_by_mark[answer.final_mark].append(answer)
 
+    def remove_answer(self, answer_raw_value):
+        answer_to_remove = None
+        for i, a in enumerate(self.answers):
+            if a.raw_text == answer_raw_value:
+                answer_to_remove = a
+                break
+
+        if answer_to_remove is not None:
+            self.answers.remove(answer_to_remove)
+            self.answers_by_mark[answer_to_remove.final_mark].remove(answer_to_remove)
+
     def build_graph(self, fun_graph_build):
         self.text_graph = fun_graph_build(self.raw_text)
         self.context_graph = fun_graph_build(self.context_text)

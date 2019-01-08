@@ -11,7 +11,7 @@ def get_text():
 
 
 def get_single_answer_questions():
-    df = pandas.read_csv('./res/Weightless_dataset_train_A.csv')
+    df = pandas.read_csv('./res/Weightless_dataset_train_A.csv', encoding='utf-8')
 
     questions = {}
     for i, row in df.iterrows():
@@ -20,7 +20,7 @@ def get_single_answer_questions():
         if q in questions:
             q_data = questions[q]
         else:
-            context = row['Text.used.to.make.inference']
+            context = row['Text.used.to.make.inference'].replace("...", "")
             q_data = Question(q, context_text=context)
             questions[q] = q_data
 
@@ -37,7 +37,7 @@ def get_single_answer_questions():
 
 
 def get_questions():
-    df = pandas.read_csv('./res/Weightless_dataset_train.csv')
+    df = pandas.read_csv('./res/Weightless_dataset_train.csv', encoding='utf-8')
 
     questions = {}
     for i, row in df.iterrows():
@@ -63,7 +63,7 @@ def get_questions():
 
 
 def get_generated_answers():
-    df = pandas.read_csv('./res/Generated_answers.csv')
+    df = pandas.read_csv('./res/Generated_answers.csv', encoding='utf-8')
 
     questions = {}
     for i, row in df.iterrows():

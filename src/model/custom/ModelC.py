@@ -9,12 +9,15 @@ import gensim
 
 
 class ModelC:
-    def __init__(self, use_concept_net=True,
-                 questions=Data.get_questions(),
-                 generated_questions=Data.get_generated_answers(), similarity_threshold=0.7):
+    def __init__(self, use_concept_net=True, questions=None, generated_questions=None, similarity_threshold=0.7):
 
         self.questions: Dict[str, Question] = questions
+        if self.questions is None:
+            self.questions = Data.get_questions()
+
         self.generated_questions: Dict[str, Question] = generated_questions
+        if self.generated_questions is None:
+            self.generated_questions = Data.get_generated_answers()
 
         # Download from https://github.com/mmihaltz/word2vec-GoogleNews-vectors
         self.word_to_vec = gensim.models.KeyedVectors.load_word2vec_format('./model/GoogleNews-vectors-negative300.bin', binary=True)
