@@ -1,3 +1,4 @@
+from model.Data import generate_answers
 from model.ModelTests import CrossValidationModelBTest, ModelATester
 from model.custom.ModelA import ModelA
 from model.custom.ModelB import ModelB
@@ -20,7 +21,10 @@ def train_models():
 
 
 if __name__ == "__main__":
-    cv_test = ModelATester()
-    cv_test.run_test()
+    a_test = ModelATester()
+    a_test.run_test()
+
+    # b_test = CrossValidationModelBTest()
+    # b_test.run_test()
 
     # generate_answers()

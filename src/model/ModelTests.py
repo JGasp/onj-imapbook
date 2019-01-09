@@ -1,5 +1,5 @@
 from typing import Dict
-
+from sklearn.metrics import f1_score
 from model import Data
 import random
 import numpy as np
@@ -10,7 +10,7 @@ from model.QAEvaluationModel import QAEvaluationModel
 
 
 class CrossValidationModelBTest:
-    def __init__(self, include_generated_answers=False):
+    def __init__(self, include_generated_answers=True):
         self.questions: Dict[str, Question] = Data.get_questions()
 
         self.generated_answers = {}
@@ -52,7 +52,7 @@ class CrossValidationModelBTest:
 
                 if self.generated_answers is not None:
                     if q.raw_text in self.generated_answers:
-                        for ga in self.generated_answers[q.raw_text].answers:
+                        for ga in self.generated_answers[q.raw_text].answers[:1]:
                             q_train_copy.add_answer(ga)
 
                 train[q.raw_text] = q_train_copy
@@ -66,7 +66,7 @@ class CrossValidationModelBTest:
                 q = test[key]
 
                 for a in q.answers:
-                    ri = qa_model.make_regression_prediction(q.raw_text, a.raw_text)
+                    ri = qa_model.make_prediction(q.raw_text, a.raw_text)
                     actual_mark = float(a.final_mark.value.replace(",", "."))
                     res = {"response": a.raw_text, "actual": actual_mark, "predicted": ri}
                     results[q.raw_text].append(res)
@@ -109,21 +109,32 @@ class CrossValidationModelBTest:
         print("#### MAE: %f" % global_mae)
         print(global_confusion_matrix)
 
+        true_scores = []
+        pred_scores = []
+        for k, answers in results.items():
+            for a in answers:
+                true_scores.append(int(float(a['actual']) * 10))
+                pred_scores.append(int(float(a['predicted']) * 10))
+
+        print("F1 (macro): %f" % f1_score(true_scores, pred_scores, average='macro'))
+        print("F1 (micro): %f" % f1_score(true_scores, pred_scores, average='micro'))
+        print("F1 (weighted): %f" % f1_score(true_scores, pred_scores, average='weighted'))
+
 
 class ModelATester:
 
     def __init__(self, include_generated_answers=True):
         self.questions: Dict[str, Question] = Data.get_single_answer_questions()
 
-        # self.generated_answers = {}
-        # if include_generated_answers:
-        #     self.generated_answers = Data.get_generated_answers()
-        #
-        #     for key, gq in self.generated_answers.items():
-        #         q = self.questions[key]
-        #
-        #         for ga in gq.answers[:1]:
-        #             q.add_answer(ga)
+        self.generated_answers = {}
+        if include_generated_answers:
+            self.generated_answers = Data.get_generated_answers()
+
+            for key, gq in self.generated_answers.items():
+                q = self.questions[key]
+
+                for ga in gq.answers[:4]:
+                    q.add_answer(ga)
 
         # question_list = [q for k, q in self.questions.items()]
         # size = len(question_list)
@@ -157,7 +168,7 @@ class ModelATester:
             q = self.test_questions[key]
 
             for a in q.answers:
-                ri = model.make_regression_prediction(q.raw_text, a.raw_text)
+                ri = model.make_prediction(q.raw_text, a.raw_text)
                 actual_mark = float(a.final_mark.value.replace(",", "."))
                 res = {"response": a.raw_text, "actual": actual_mark, "predicted": ri}
                 results[q.raw_text].append(res)
@@ -198,3 +209,14 @@ class ModelATester:
         print("$$$$$$$$$$$$$$$$$$$$$$$$$")
         print("#### MAE: %f" % global_mae)
         print(global_confusion_matrix)
+
+        true_scores = []
+        pred_scores = []
+        for k, answers in results.items():
+            for a in answers:
+                true_scores.append(int(float(a['actual']) * 10))
+                pred_scores.append(int(float(a['predicted']) * 10))
+
+        print("F1 (macro): %f" % f1_score(true_scores, pred_scores, average='macro'))
+        print("F1 (micro): %f" % f1_score(true_scores, pred_scores, average='micro'))
+        print("F1 (weighted): %f" % f1_score(true_scores, pred_scores, average='weighted'))

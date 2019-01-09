@@ -23,7 +23,7 @@ class ModelA:
         self.model.build()
 
     def make_prediction(self, question, answer):
-        self.model.make_regression_prediction(question, answer)
+        self.model.make_prediction(question, answer)
 
     def persist(self):
         self.model.persist(self.model_file_name)

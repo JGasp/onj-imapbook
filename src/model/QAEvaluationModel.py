@@ -131,7 +131,7 @@ class QAEvaluationModel:
         sim_values = graph.similarity[mark]
 
         prev_word_index = []
-        stop_words = {}
+        node_stop_words = {}
         for an in answer.text_graph.nodes:
             node_index, node_similarity = self.get_similar_nodes(an.word, graph)
 
@@ -155,7 +155,7 @@ class QAEvaluationModel:
 
                                 stop_words_sim = 0
                                 if n.next in sim_values:
-                                    sim_sw = self.is_link_similarity(n.next, stop_words)
+                                    sim_sw = self.is_link_similarity(n.next, node_stop_words)
                                     if sim_sw > 0:
                                         stop_words_sim += sim_values[n.next] * sim_sw
                                         break  # Disregard multiple stop_words similarity
@@ -167,10 +167,10 @@ class QAEvaluationModel:
 
             if not(self.find_first_similar and len(node_index) == 0):
                 prev_word_index = node_index
-                stop_words = {}
+                node_stop_words = {}
 
             for w in an.next.words:
-                stop_words[w] = True
+                node_stop_words[w] = True
 
         if len(answer.text_graph.nodes) == 0:
             return 0.0
@@ -180,14 +180,11 @@ class QAEvaluationModel:
 
         return similarity
 
-    def update_context_similarity(self, answer: Answer, question: Question):
-        self.update_graph_similarity(answer, question.context_graph)
-
     def update_graph_similarity(self, answer: Answer, graph: Graph):
         sim_values = graph.similarity[answer.final_mark]
 
         prev_word_index = []
-        stop_words = {}
+        node_stop_words = {}
 
         for an in answer.text_graph.nodes:
             node_index, node_similarity = self.get_similar_nodes(an.word, graph)
@@ -211,7 +208,7 @@ class QAEvaluationModel:
                             for i in range(start, end):
                                 n = graph.nodes[i]
 
-                                sim_sw = self.is_link_similarity(n.next, stop_words)
+                                sim_sw = self.is_link_similarity(n.next, node_stop_words)
                                 stop_word_similarity = self.stop_word_len * sim_sw
 
                                 if stop_word_similarity > 0:
@@ -228,15 +225,17 @@ class QAEvaluationModel:
 
             if not (self.find_first_similar and len(node_index) == 0):  # Find first similar node (skip not found ones)
                 prev_word_index = node_index
-                stop_words = {}
+                node_stop_words = {}
 
             for w in an.next.words:
-                stop_words[w] = True
+                node_stop_words[w] = True
+
+        return True
 
     def build_context_graph_similarity(self):
         for key, q in self.questions.items():
             for a in q.answers:
-                self.update_context_similarity(a, q)
+                self.update_graph_similarity(a, q.context_graph)
 
         for key, q in self.questions.items():
             graph = q.context_graph
@@ -302,6 +301,7 @@ class QAEvaluationModel:
 
             # TODO: Handle over fitting
             lm = linear_model.LinearRegression()
+            # lm = linear_model.LogisticRegression(solver='lbfgs')
             model = lm.fit(X, y)
 
             q.linear_regression = lm
@@ -365,7 +365,7 @@ class QAEvaluationModel:
     #
     #     return combined_sim
 
-    def make_regression_prediction(self, question, answer):
+    def make_prediction(self, question, answer):
         answers_sim, context_sim = self.calculate_prediction_ratio(question, answer)
         q = self.questions[question]
 

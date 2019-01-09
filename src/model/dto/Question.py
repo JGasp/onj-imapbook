@@ -10,7 +10,7 @@ class Question:
         self.raw_text: str = raw_text
         self.context_text = context_text
 
-        self.text_graph: Graph = text_graph
+        # self.text_graph: Graph = text_graph
         self.context_graph: Graph = context_graph
 
         self.answers: List[Answer] = []

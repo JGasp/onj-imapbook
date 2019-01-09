@@ -39,6 +39,8 @@ def get_single_answer_questions():
 def get_questions():
     df = pandas.read_csv('./res/Weightless_dataset_train.csv', encoding='utf-8')
 
+    counter = {m: 0 for m in Mark.values()}
+
     questions = {}
     for i, row in df.iterrows():
         q = row['Question']
@@ -56,9 +58,11 @@ def get_questions():
         fr = row['Final.rating']
 
         ans = Answer(res, Mark.by_value(gr), Mark.by_value(ar), Mark.by_value(fr))
+        counter[ans.final_mark] += 1
 
         q_data.add_answer(ans)
 
+    # print(counter)
     return questions
 
 
@@ -94,6 +98,8 @@ def generate_answers():
         q: Question = q
 
         num = int((len(q.answers_by_mark[Mark.M05]) + len(q.answers_by_mark[Mark.M1])) / 2 - len(q.answers_by_mark[Mark.M0]))
+        if num < 5:
+            num = 5
 
         avg_len = 0
         count = 0

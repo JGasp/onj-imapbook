@@ -9,7 +9,7 @@ import gensim
 
 
 class ModelC:
-    def __init__(self, use_concept_net=True, questions=None, generated_questions=None, similarity_threshold=0.7):
+    def __init__(self, use_concept_net=True, questions=None, generated_questions=None, similarity_threshold=0.6):
 
         self.questions: Dict[str, Question] = questions
         if self.questions is None:
@@ -32,6 +32,23 @@ class ModelC:
         # Thresholds
         # buy <> purchase => 0.7639905
         # space <> gravity => 0.19068718
+        # confident <> brave = > 0.19375078
+        # confident <> happy = > 0.5893531
+        # confident <> car = > 0.06907264
+        # confident <> animal = > -0.010198391
+        # brave <> courageous = > -0.010198391
+
+        # word_to_vec.similar_by_word('brave')
+        # [('courageous', 0.7414764761924744), ('bravely', 0.648894190788269), ('bravest', 0.6485252380371094),
+        # ('valiant', 0.5948496460914612), ('gallant', 0.5745828151702881), ('courageously', 0.572306752204895),
+        # ('courage', 0.5651585459709167), ('brave_souls', 0.5543081760406494), ('fearless', 0.553043782711029),
+        # ('heroic', 0.5513851046562195)]
+
+        # word_to_vec.similar_by_word('buy')
+        # [('sell', 0.8308461904525757), ('purchase', 0.7639904618263245), ('buying', 0.7209186553955078),
+        # ('bought', 0.7087081670761108), ('buys', 0.6617437601089478), ('Buy', 0.5850198864936829),
+        # ('tobuy', 0.5843992829322815), ('purchased', 0.5826954245567322), ('Buying', 0.5780205130577087),
+        # ('acquire', 0.5730166435241699)]
 
     def link_similarity(self, link: Link, stop_words):
         max_sim = 0
@@ -81,7 +98,7 @@ class ModelC:
         self.concept_net_core.persist()
 
     def make_prediction(self, question, answer):
-        self.model.make_regression_prediction(question, answer)
+        self.model.make_prediction(question, answer)
 
     def persist(self):
         self.model.persist(self.model_file_name)
