@@ -7,6 +7,7 @@ from model.dto.Graph import Node
 from model.dto.Graph import Link
 from model.dto.Graph import Graph
 
+import math
 import nltk
 from nltk.corpus import stopwords
 from nltk.stem.snowball import SnowballStemmer
@@ -24,21 +25,17 @@ class AnswerSimParam(Enum):
 
 
 class QAEvaluationModel:
-    def __init__(self, word_len=5, stop_word_len=5, len_lambda=0.2, ans_sim=AnswerSimParam.AVG):
+    def __init__(self, word_len=1, stop_word_len=1, len_lambda=0.2, ans_sim=AnswerSimParam.MAX):
         self.questions: Dict[str, Question] = {}
 
-        self.word_len = word_len
-        self.stop_word_len = stop_word_len
+        self.word_weight = word_len
+        self.stop_word_weight = stop_word_len
         self.len_lambda = len_lambda
-
-        # Regularization
-        self.context_base_similarity = self.word_len * 1
-        self.answers_base_similarity = self.word_len * 1  # + self.stop_word_len * 1
 
         self.find_first_similar = True
         self.answer_similarity: AnswerSimParam = ans_sim
 
-        # Functions to override for word2vec
+        # Functions to override for ModelC
         self.is_link_similarity = self.link_similarity
         self.get_similar_nodes = self.filter_similar_nodes
 
@@ -99,10 +96,10 @@ class QAEvaluationModel:
         distance = 1
         for i in range(start, end):
             n = graph.nodes[i]
-            distance += len(n.next.words) * self.stop_word_len
+            distance += len(n.next.words)  # * self.stop_word_weight
 
             if i != start:
-                distance += self.word_len
+                distance += 1  # self.word_weight
 
         return distance
 
@@ -127,7 +124,7 @@ class QAEvaluationModel:
         return nodes_index, similarity
 
     def calculate_answer_similarity(self, answer: Answer, graph: Graph, mark: Mark):
-        similarity = 0
+        total_similarity = 0
         sim_values = graph.similarity[mark]
 
         prev_word_index = []
@@ -139,31 +136,56 @@ class QAEvaluationModel:
             if len(node_index) > 0:
                 for wi in node_index:
                     n = graph.nodes[wi]
+
+                    best_sim = 0
                     if n in sim_values:
-                        similarity += sim_values[n] * node_similarity[wi]
+                        sim = sim_values[n] * node_similarity[wi]
+                        if sim > best_sim:
+                            best_sim = sim
+
+                    total_similarity += best_sim
 
                 if len(prev_word_index) > 0:
-                    # Normalize score based on number of paths
-                    paths = len(prev_word_index) * len(node_index)
+                    best_sim = 0
+                    t_pwi = None
+                    t_wi = None
+                    t_link = None
+
                     for pwi in prev_word_index:
                         for wi in node_index:
                             start, end = self.get_graph_direction(pwi, wi)
                             distance = self.calculate_node_distance(graph, start, end)
 
-                            for i in range(start, end):
-                                n = graph.nodes[i]
+                            if distance == 1 and len(node_stop_words) == 0:
+                                best_sim = 1
+                                t_pwi = graph.nodes[pwi]
+                                t_wi = graph.nodes[wi]
+                            else:
+                                for i in range(start, end):
+                                    n = graph.nodes[i]
 
-                                stop_words_sim = 0
-                                if n.next in sim_values:
-                                    sim_sw = self.is_link_similarity(n.next, node_stop_words)
-                                    if sim_sw > 0:
-                                        stop_words_sim += sim_values[n.next] * sim_sw
-                                        break  # Disregard multiple stop_words similarity
+                                    if n.next in sim_values:
+                                        sim_sw = self.is_link_similarity(n.next, node_stop_words)
+                                        if sim_sw > 0:
+                                            sim_sw += sim_values[n.next] * sim_sw
 
-                                if self.len_lambda > 0:
-                                    stop_words_sim = stop_words_sim / (self.len_lambda * distance)
+                                            if self.len_lambda > 0:
+                                                sim_sw = sim_sw / (self.len_lambda * distance)
 
-                                similarity += stop_words_sim / paths
+                                            if sim_sw > best_sim:
+                                                best_sim = sim_sw
+                                                t_pwi = graph.nodes[pwi]
+                                                t_wi = graph.nodes[wi]
+                                                t_link = n.next
+
+                    if best_sim > 0:
+                        if t_link is None:
+                            total_similarity += 1
+                        else:
+                            total_similarity += sim_values[t_link]
+
+                        # total_similarity += sim_values[t_pwi] / 2
+                        # total_similarity += sim_values[t_wi] / 2
 
             if not(self.find_first_similar and len(node_index) == 0):
                 prev_word_index = node_index
@@ -176,9 +198,9 @@ class QAEvaluationModel:
             return 0.0
 
         # Normalize similarity based on answer length
-        similarity /= len(answer.text_graph.nodes)
+        total_similarity /= len(answer.text_graph.nodes)
 
-        return similarity
+        return total_similarity
 
     def update_graph_similarity(self, answer: Answer, graph: Graph):
         sim_values = graph.similarity[answer.final_mark]
@@ -190,38 +212,54 @@ class QAEvaluationModel:
             node_index, node_similarity = self.get_similar_nodes(an.word, graph)
 
             if len(node_index) > 0:
-                # Increase node score TODO: try decrease with number of multiple appearances
                 for wi in node_index:
                     n = graph.nodes[wi]
                     if n not in sim_values:
                         sim_values[n] = 0
-                    sim_values[n] += self.word_len * node_similarity[wi]
+                    sim_values[n] += self.word_weight * node_similarity[wi]
 
                 if len(prev_word_index) > 0:
-                    # Normalize score based on number of paths
-                    paths = len(prev_word_index) * len(node_index)
+                    best_sim = 0
+                    t_pwi = None
+                    t_wi = None
+                    t_link = None
+
                     for pwi in prev_word_index:
                         for wi in node_index:
                             start, end = self.get_graph_direction(pwi, wi)
                             distance = self.calculate_node_distance(graph, start, end)
 
-                            for i in range(start, end):
-                                n = graph.nodes[i]
+                            if len(node_stop_words) == 0:
+                                if distance == 1:
+                                    best_sim = 1
+                                    t_pwi = graph.nodes[pwi]
+                                    t_wi = graph.nodes[wi]
+                            else:
+                                for i in range(start, end):
+                                    n = graph.nodes[i]
 
-                                sim_sw = self.is_link_similarity(n.next, node_stop_words)
-                                stop_word_similarity = self.stop_word_len * sim_sw
+                                    if len(n.next.words) > 0:
+                                        sw_sim = self.is_link_similarity(n.next, node_stop_words)
 
-                                if stop_word_similarity > 0:
-                                    # Penalize long references
-                                    if self.len_lambda > 0:
-                                        stop_word_similarity = stop_word_similarity / (self.len_lambda * distance)
+                                        if sw_sim > 0:  # Penalize long references
+                                            sw_sim = self.stop_word_weight * sw_sim
+                                            if self.len_lambda > 0:
+                                                sw_sim = sw_sim / (self.len_lambda * distance)
 
-                                    # Normalize value based on number of paths between different matching nodes
-                                    stop_word_similarity /= paths
+                                            if sw_sim > best_sim:
+                                                best_sim = sw_sim
+                                                t_pwi = graph.nodes[pwi]
+                                                t_wi = graph.nodes[wi]
+                                                t_link = n.next
 
-                                    if n.next not in sim_values:
-                                        sim_values[n.next] = 0
-                                    sim_values[n.next] += stop_word_similarity
+                    if best_sim > 0:
+                        if t_link is not None:
+                            if t_link not in sim_values:
+                                sim_values[t_link] = 0
+                            sim_values[t_link] += best_sim
+
+                        sim_values[t_pwi] += best_sim / 2
+                        sim_values[t_wi] += best_sim / 2
 
             if not (self.find_first_similar and len(node_index) == 0):  # Find first similar node (skip not found ones)
                 prev_word_index = node_index
@@ -230,8 +268,6 @@ class QAEvaluationModel:
             for w in an.next.words:
                 node_stop_words[w] = True
 
-        return True
-
     def build_context_graph_similarity(self):
         for key, q in self.questions.items():
             for a in q.answers:
@@ -239,6 +275,10 @@ class QAEvaluationModel:
 
         for key, q in self.questions.items():
             graph = q.context_graph
+
+            for m in Mark.values():
+                for k in graph.similarity[m]:
+                    graph.similarity[m][k] = math.log(1 + graph.similarity[m][k])
 
             sum_similarity = {m: 0 for m in Mark.values()}
             count = {m: 0 for m in Mark.values()}
@@ -249,9 +289,10 @@ class QAEvaluationModel:
                 count[a.final_mark] += 1
 
             for m in Mark.values():
-                graph.avg_similarity[m] = self.context_base_similarity
                 if count[m] > 0:
-                    graph.avg_similarity[m] += sum_similarity[m] / count[m]
+                    graph.avg_similarity[m] = (sum_similarity[m] + 1) / count[m]
+                else:
+                    graph.avg_similarity[m] = 1
 
     def build_answers_graph_similarity(self):
         for key, q in self.questions.items():
@@ -271,9 +312,10 @@ class QAEvaluationModel:
                     count[a.final_mark] += 1
 
                 for m in Mark.values():
-                    a.text_graph.avg_similarity[m] = self.answers_base_similarity
                     if count[m] > 0:
-                        a.text_graph.avg_similarity[m] += sum_similarity[m] / count[m]
+                        a.text_graph.avg_similarity[m] = (sum_similarity[m] + 1) / count[m]
+                    else:
+                        a.text_graph.avg_similarity[m] = 1
 
     def transform_parameters(self, answers_sim, context_sim):
         x = []

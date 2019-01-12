@@ -9,22 +9,22 @@ import gensim
 
 
 class ModelC:
-    def __init__(self, use_concept_net=True, questions=None, generated_questions=None, similarity_threshold=0.6):
+    def __init__(self, use_concept_net=True, similarity_threshold=0.6):
 
-        self.questions: Dict[str, Question] = questions
-        if self.questions is None:
-            self.questions = Data.get_questions()
+        self.questions: Dict[str, Question] = Data.get_questions()
+        self.generated_questions: Dict[str, Question] = Data.get_generated_answers()
 
-        self.generated_questions: Dict[str, Question] = generated_questions
-        if self.generated_questions is None:
-            self.generated_questions = Data.get_generated_answers()
+        for key, gq in self.generated_questions.items():
+            for ga in gq.answers:
+                self.questions[key].add_answer(ga)
 
         # Download from https://github.com/mmihaltz/word2vec-GoogleNews-vectors
         self.word_to_vec = gensim.models.KeyedVectors.load_word2vec_format('./model/GoogleNews-vectors-negative300.bin', binary=True)
         self.similarity_threshold = similarity_threshold
 
         self.use_concept_net = use_concept_net
-        self.concept_net_core = ConceptNetCore()
+        if self.use_concept_net:
+            self.concept_net_core = ConceptNetCore()
 
         self.model: QAEvaluationModel = None
         self.model_file_name = './model/model_c.data'
@@ -53,12 +53,15 @@ class ModelC:
     def link_similarity(self, link: Link, stop_words):
         max_sim = 0
         for w in link.words:
-            for sw in stop_words:
-
-                sim = self.word_to_vec.similarity(w, sw)
-                if sim > self.similarity_threshold:
-                    if sim > max_sim:
-                        max_sim = sim
+            if w in stop_words:
+                return 1
+            else:
+                for sw in stop_words:
+                    if w in self.word_to_vec and sw in self.word_to_vec:
+                        sim = self.word_to_vec.similarity(w, sw)
+                        if sim > self.similarity_threshold:
+                            if sim > max_sim:
+                                max_sim = sim
 
         return max_sim
 
@@ -66,33 +69,42 @@ class ModelC:
         nodes = []
         similarity = {}
         for key, ni in graph.node_index.items():
-            words = [key]
+            if key == word:
+                for i in ni:
+                    similarity[i] = 1
+                    nodes.append(i)
+            else:
+                if word in self.word_to_vec:
+                    words = [key]
 
-            if self.use_concept_net:
-                data = self.concept_net_core.get_data(key)
-                for d in data:
-                    words.append(d.label)
+                    if self.use_concept_net:
+                        data = self.concept_net_core.get_data(key)
+                        for d in data:
+                            words.append(d.label)
 
-            for w in words:
-                sim = self.word_to_vec.similarity(word, w)
-                if sim > self.similarity_threshold:
-                    for i in ni:
-                        similarity[i] = sim
-                        nodes.append(i)
+                    for w in words:
+                        if w in self.word_to_vec:
+                            sim = self.word_to_vec.similarity(word, w)
+                            if sim > self.similarity_threshold:
+                                for i in ni:
+                                    similarity[i] = sim
+                                    nodes.append(i)
 
         return nodes, similarity
 
     def build(self):
-        for key, gq in self.generated_questions.items():
-            for ga in gq.answers:
-                self.questions[key].add_answer(ga)
+        self.build_custom(self.questions)
+
+    def build_custom(self, questions):
 
         self.model = QAEvaluationModel()
         self.model.is_link_similarity = self.link_similarity
         self.model.get_similar_nodes = self.filter_similar_nodes
 
-        self.model.add_questions(self.questions)
+        self.model.add_questions(questions)
         self.model.build()
+
+        return self.model
 
     def persist_concept_net_data(self):
         self.concept_net_core.persist()
