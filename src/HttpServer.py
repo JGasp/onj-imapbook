@@ -1,15 +1,20 @@
 import socketserver
 import json
 
-from model.custom.ModelA import ClassifierModelA
-from model.custom.ModelB import ClassifierModelB
-from model.custom.ModelC import ClassifierModelC
+from model.custom.ModelA import ModelA
+from model.custom.ModelB import ModelB
+from model.custom.ModelC import ModelC
 
 
 # Initialize all models
-model_a = ClassifierModelA.get_build_model()
-model_b = ClassifierModelB.get_build_model()
-model_c = ClassifierModelC.get_build_model()
+model_a = ModelA()
+model_a.load()
+
+model_b = ModelB()
+model_b.load()
+
+model_c = ModelC()
+model_c.load(max_ans_graphs=5)
 
 
 def evaluate_request(model_id, question, answer):

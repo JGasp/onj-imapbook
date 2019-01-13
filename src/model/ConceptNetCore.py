@@ -80,13 +80,20 @@ class ConceptNetCore:
 
         self.concept_net_data = self.storage.load()
 
+        self.filter_data = self.default_filter_words
+
     def get_data(self, word):
         if word in self.concept_net_data:
             return self.concept_net_data[word]
         else:
             data = self.client.query(word)
+            data = self.filter_data(word, data)
             self.concept_net_data[word] = data
             return data
+
+    @staticmethod
+    def default_filter_words(word, data):
+        return data
 
     def persist(self):
         self.storage.persist(self.concept_net_data)

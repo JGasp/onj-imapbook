@@ -6,11 +6,14 @@ from model.QAEvaluationModel import QAEvaluationModel
 
 
 class ModelB:
-    def __init__(self):
+    def __init__(self, include_generated_questions=False):
         self.questions: Dict[str, Question] = Data.get_questions()
-        self.generated_questions: Dict[str, Question] = Data.get_generated_answers()
-        self.model = None
 
+        self.generated_questions = {}
+        if include_generated_questions:
+            self.generated_questions: Dict[str, Question] = Data.get_generated_answers()
+
+        self.model = None
         self.model_file_name = './model/model_b.data'
 
     def build(self):
@@ -23,7 +26,7 @@ class ModelB:
         self.model.build()
 
     def make_prediction(self, question, answer):
-        self.model.make_prediction(question, answer)
+        return self.model.make_prediction(question, answer)
 
     def persist(self):
         self.model.persist(self.model_file_name)

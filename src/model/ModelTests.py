@@ -10,12 +10,12 @@ from model.QAEvaluationModel import QAEvaluationModel
 
 
 class CrossValidationModelCTest:
-    def __init__(self, include_generated_answers=True):
-        self.model_C = ModelC()
+    def __init__(self, include_generated_answers=True, preloaded_word2vec=None):
+        self.model_C = ModelC(preloaded_word2vec=preloaded_word2vec)
 
         self.questions: Dict[str, Question] = Data.get_questions()
 
-        self.generated_answers = {}
+        self.generated_answers = None
         if include_generated_answers:
             self.generated_answers = Data.get_generated_answers()
 
@@ -54,13 +54,14 @@ class CrossValidationModelCTest:
 
                 if self.generated_answers is not None:
                     if q.raw_text in self.generated_answers:
-                        for ga in self.generated_answers[q.raw_text].answers[:1]:
+                        for ga in self.generated_answers[q.raw_text].answers:
                             q_train_copy.add_answer(ga)
 
                 train[q.raw_text] = q_train_copy
                 test[q.raw_text] = q_test_copy
 
-            qa_model = self.model_C.build_custom(train)
+            qa_model = self.model_C.build_custom(train, 5)
+            self.model_C.persist_concept_net_data()
 
             for key in test:
                 q = test[key]
@@ -164,7 +165,7 @@ class CrossValidationModelBTest:
 
                 if self.generated_answers is not None:
                     if q.raw_text in self.generated_answers:
-                        for ga in self.generated_answers[q.raw_text].answers[:1]:
+                        for ga in self.generated_answers[q.raw_text].answers:
                             q_train_copy.add_answer(ga)
 
                 train[q.raw_text] = q_train_copy
@@ -264,6 +265,71 @@ class ModelATester:
 
         for key in self.test_questions:
             q = self.test_questions[key]
+
+            for a in q.answers:
+                ri = model.make_prediction(q.raw_text, a.raw_text)
+                actual_mark = float(a.final_mark.value.replace(",", "."))
+                res = {"response": a.raw_text, "actual": actual_mark, "predicted": ri}
+                results[q.raw_text].append(res)
+
+        global_confusion_matrix = np.zeros((3, 3))
+        global_mae = 0
+        global_counter = 0
+
+        for k, answers in results.items():
+
+            confusion_matrix = np.zeros((3, 3))
+            mae = 0
+            counter = 0
+
+            print(">>>> Question %s" % k)
+
+            for a in answers:
+                diff = abs(a["predicted"] - a["actual"])
+
+                mae += diff
+                counter += 1
+
+                global_mae += diff
+                global_counter += 1
+
+                pred = int(a["predicted"] * 2)
+                actual = int(a["actual"] * 2)
+                confusion_matrix[pred, actual] += 1
+                global_confusion_matrix[pred, actual] += 1
+
+                print("%02f %02f \t %s" % (a["predicted"], a["actual"], a["response"]))
+
+            mae /= counter
+            print("#### MAE: %f" % mae)
+            print(confusion_matrix)
+
+        global_mae /= global_counter
+        print("$$$$$$$$$$$$$$$$$$$$$$$$$")
+        print("#### MAE: %f" % global_mae)
+        print(global_confusion_matrix)
+
+        true_scores = []
+        pred_scores = []
+        for k, answers in results.items():
+            for a in answers:
+                true_scores.append(int(float(a['actual']) * 10))
+                pred_scores.append(int(float(a['predicted']) * 10))
+
+        print("F1 (macro): %f" % f1_score(true_scores, pred_scores, average='macro'))
+        print("F1 (micro): %f" % f1_score(true_scores, pred_scores, average='micro'))
+        print("F1 (weighted): %f" % f1_score(true_scores, pred_scores, average='weighted'))
+
+
+class ModelTester:
+    def __init__(self):
+        self.questions: Dict[str, Question] = Data.get_questions()
+
+    def run_test(self, model):
+
+        results = {self.questions[key].raw_text: [] for key in self.questions}
+
+        for key, q in self.questions.items():
 
             for a in q.answers:
                 ri = model.make_prediction(q.raw_text, a.raw_text)

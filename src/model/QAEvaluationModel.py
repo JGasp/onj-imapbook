@@ -17,6 +17,7 @@ from typing import Dict
 import re
 import pickle
 import os.path
+import random
 
 
 class AnswerSimParam(Enum):
@@ -25,7 +26,7 @@ class AnswerSimParam(Enum):
 
 
 class QAEvaluationModel:
-    def __init__(self, word_len=1, stop_word_len=1, len_lambda=0.2, ans_sim=AnswerSimParam.MAX):
+    def __init__(self, word_len=1, stop_word_len=1, len_lambda=0.2, max_ans_graphs=None, ans_sim=AnswerSimParam.MAX):
         self.questions: Dict[str, Question] = {}
 
         self.word_weight = word_len
@@ -34,6 +35,7 @@ class QAEvaluationModel:
 
         self.find_first_similar = True
         self.answer_similarity: AnswerSimParam = ans_sim
+        self.max_ans_graphs = max_ans_graphs
 
         # Functions to override for ModelC
         self.is_link_similarity = self.link_similarity
@@ -296,26 +298,38 @@ class QAEvaluationModel:
 
     def build_answers_graph_similarity(self):
         for key, q in self.questions.items():
-            for a in q.answers:
-                for aup in q.answers_by_mark[a.final_mark]:
-                    self.update_graph_similarity(aup, a.text_graph)
+            for m in Mark.values():
+                answers = q.answers_by_mark[m]
+
+                graph_answers = answers
+                if self.max_ans_graphs is not None:
+                    random.shuffle(graph_answers)
+                    graph_answers = graph_answers[:self.max_ans_graphs]
+
+                for ag in graph_answers:
+                    for aup in answers:
+                        self.update_graph_similarity(aup, ag.text_graph)
 
         for key, q in self.questions.items():
-            for a in q.answers:
+            for m in Mark.values():
+                graph_answers = q.answers_by_mark[m]
+                if self.max_ans_graphs is not None:
+                    graph_answers = graph_answers[:self.max_ans_graphs]
 
-                sum_similarity = {m: 0 for m in Mark.values()}
-                count = {m: 0 for m in Mark.values()}
+                for ag in graph_answers:
 
-                for aup in q.answers_by_mark[a.final_mark]:
-                    sim = self.calculate_answer_similarity(aup, a.text_graph, mark=a.final_mark)
-                    sum_similarity[a.final_mark] += sim
-                    count[a.final_mark] += 1
+                    sum_similarity = 0
+                    count = 0
 
-                for m in Mark.values():
-                    if count[m] > 0:
-                        a.text_graph.avg_similarity[m] = (sum_similarity[m] + 1) / count[m]
+                    for aup in q.answers_by_mark[m]:
+                        sim = self.calculate_answer_similarity(aup, ag.text_graph, mark=ag.final_mark)
+                        sum_similarity += sim
+                        count += 1
+
+                    if count > 0:
+                        ag.text_graph.avg_similarity[m] = (sum_similarity + 1) / count
                     else:
-                        a.text_graph.avg_similarity[m] = 1
+                        ag.text_graph.avg_similarity[m] = 1
 
     def transform_parameters(self, answers_sim, context_sim):
         x = []
@@ -341,7 +355,6 @@ class QAEvaluationModel:
                 X.append(x_i)
                 y.append(y_i)
 
-            # TODO: Handle over fitting
             lm = linear_model.LinearRegression()
             # lm = linear_model.LogisticRegression(solver='lbfgs')
             model = lm.fit(X, y)
@@ -361,20 +374,21 @@ class QAEvaluationModel:
 
         answers_sim = {m: 0 for m in Mark.values()}
         for m in Mark.values():
-            for ans in q.answers_by_mark[m]:
+            graph_answers = q.answers_by_mark[m]
+            if self.max_ans_graphs is not None:
+                graph_answers = graph_answers[:self.max_ans_graphs]
 
-                if answer == 'd':
-                    answer = answer
+            for ag in graph_answers:
+                if ag.text_graph.avg_similarity[m] > 0:
+                    sim = self.calculate_answer_similarity(a, ag.text_graph, mark=m) / ag.text_graph.avg_similarity[m]
 
-                sim = self.calculate_answer_similarity(a, ans.text_graph, mark=m) / ans.text_graph.avg_similarity[m]
-
-                if self.answer_similarity == AnswerSimParam.AVG:
-                    # Average similarity to answers with same marks
-                    answers_sim[m] += sim / len(q.answers_by_mark[m])
-                elif self.answer_similarity == AnswerSimParam.MAX:
-                    # Most similar answer with same mark
-                    if answers_sim[m] < sim:
-                        answers_sim[m] = sim
+                    if self.answer_similarity == AnswerSimParam.AVG:
+                        # Average similarity to answers with same marks
+                        answers_sim[m] += sim / len(graph_answers)
+                    elif self.answer_similarity == AnswerSimParam.MAX:
+                        # Most similar answer with same mark
+                        if answers_sim[m] < sim:
+                            answers_sim[m] = sim
 
         context_sim = {m: 0 for m in Mark.values()}
         for m in Mark.values():
@@ -382,30 +396,6 @@ class QAEvaluationModel:
             context_sim[m] = sim / q.context_graph.avg_similarity[m]
 
         return answers_sim, context_sim
-
-    # def calculate_combined_prediction_ratio(self, question, answer):
-    #     answers_sim, context_sim = self.calculate_prediction_ratio(question, answer)
-    #
-    #     answers_sim_total = 0
-    #     for key, value in answers_sim.items():
-    #         answers_sim_total += value
-    #
-    #     context_sim_total = 0
-    #     for key, value in context_sim.items():
-    #         context_sim_total += value
-    #
-    #     combined_sim = {m: 0 for m in Mark.values()}
-    #     for m in Mark.values():
-    #         sim = 0
-    #         if answers_sim_total > 0:
-    #             sim += answers_sim[m] / answers_sim_total
-    #
-    #         if context_sim_total > 0:
-    #             sim += (context_sim[m] / context_sim_total) * 0.3
-    #
-    #         combined_sim[m] = sim
-    #
-    #     return combined_sim
 
     def make_prediction(self, question, answer):
         answers_sim, context_sim = self.calculate_prediction_ratio(question, answer)
@@ -420,19 +410,6 @@ class QAEvaluationModel:
             return 0
         else:
             return 0.5
-
-    # def make_prediction(self, question, answer):
-    #     sim = self.calculate_combined_prediction_ratio(question, answer)
-    #
-    #     max_sim = 0
-    #     final_mark = None
-    #
-    #     for m in Mark.values():
-    #         if sim[m] > max_sim:
-    #             final_mark = m
-    #             max_sim = sim[m]
-    #
-    #     return final_mark
 
     def tokenize(self, raw_text):
         tokens = []
