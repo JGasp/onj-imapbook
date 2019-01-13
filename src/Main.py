@@ -81,9 +81,9 @@ def calculate_human_prediction_F1():
 
 
 if __name__ == "__main__":
-    #  calculate_human_prediction_F1()
+    calculate_human_prediction_F1()
 
-    train_models()
+    # train_models()
 
     # a_test = ModelATester()
     # a_test.run_test()

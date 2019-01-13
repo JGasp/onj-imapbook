@@ -1,9 +1,13 @@
-import socketserver
 import json
 
 from model.custom.ModelA import ModelA
 from model.custom.ModelB import ModelB
 from model.custom.ModelC import ModelC
+
+from flask import Flask, url_for
+from flask import json
+from flask import request
+from flask import Response
 
 
 # Initialize all models
@@ -28,20 +32,29 @@ def evaluate_request(model_id, question, answer):
         return None
 
 
-class ModelRequestHandler(socketserver.BaseRequestHandler):
-
-    def handle(self):
-        data = self.request.recv(2048).strip()
-        request = json.load(data)
-
-        predicted = evaluate_request(request['modelId'], request['question'], request['questionResponse'])
-
-        response = json.dump({"score": predicted}, fp=lambda o: o.__dict__)
-        self.request.sendall(response.encode())
+app = Flask(__name__)
 
 
-if __name__ == "__main__":
-    HOST, PORT = "localhost", 8080
+@app.route('/predict', methods = ["POST"])
+def api_articles():
+    content = json.dumps(request.json)
+    print("Request: " + content)
 
-    tcp_server = socketserver.TCPServer((HOST, PORT), ModelRequestHandler)
-    tcp_server.serve_forever()
+    json_content = request.json
+
+    if 'modelId' in json_content:
+        predicted = evaluate_request(json_content['modelId'], json_content['question'], json_content['questionResponse'])
+
+        data = {
+            "score": predicted,
+            "probability": None
+        }
+        js = json.dumps(data)
+
+        return Response(js, status=200, mimetype='application/json')
+    else:
+        return Response(status=400, mimetype='application/json')
+
+
+if __name__ == '__main__':
+    app.run(port=8080)
